@@ -1,0 +1,48 @@
+.sncf-panel-label {
+    margin-left: 4px;
+    font-weight: bold;
+}
+
+.sncf-header {
+    font-weight: bold;
+    font-size: 1.1em;
+}
+
+.sncf-departure-row {
+    spacing: 12px;
+}
+
+.sncf-time {
+    min-width: 50px;
+    font-weight: bold;
+    font-feature-settings: "tnum";
+}
+
+.sncf-delay {
+    min-width: 60px;
+    font-size: 0.95em;
+}
+
+.sncf-on-time {
+    color: #4caf50;
+}
+
+.sncf-delayed {
+    color: #f44336;
+    font-weight: bold;
+}
+
+.sncf-cancelled {
+    color: #f44336;
+    font-weight: bold;
+    text-decoration: line-through;
+}
+
+.sncf-network {
+    min-width: 100px;
+    color: #888;
+}
+
+.sncf-direction {
+    font-style: italic;
+}

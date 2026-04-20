@@ -1,0 +1,11 @@
+{
+  "name": "SNCF Departures",
+  "description": "Display departures from an SNCF train station",
+  "uuid": "sncf-departures@dev.gourves.net",
+  "url": "https://github.com/egourves/sncf-departures",
+  "version": 1,
+  "settings-schema": "org.gnome.shell.extensions.sncf-departures",
+  "shell-version": [
+    "49"
+  ]
+}

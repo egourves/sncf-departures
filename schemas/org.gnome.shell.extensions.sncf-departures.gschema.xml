@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="sncf-departures@dev.gourves.net">
+  <schema id="org.gnome.shell.extensions.sncf-departures"
+          path="/org/gnome/shell/extensions/sncf-departures/">
+
+    <key name="api-token" type="s">
+      <default>''</default>
+      <summary>Navitia API token</summary>
+      <description>Authentication token for the Navitia API</description>
+    </key>
+
+    <key name="departure-station-id" type="s">
+      <default>''</default>
+      <summary>Departure station ID</summary>
+      <description>Navitia stop_area ID for the departure station</description>
+    </key>
+
+    <key name="departure-station-name" type="s">
+      <default>''</default>
+      <summary>Departure station name</summary>
+      <description>Human-readable name of the departure station</description>
+    </key>
+
+    <key name="arrival-station-id" type="s">
+      <default>''</default>
+      <summary>Arrival station ID</summary>
+      <description>Navitia stop_area ID for the arrival station (optional filter)</description>
+    </key>
+
+    <key name="arrival-station-name" type="s">
+      <default>''</default>
+      <summary>Arrival station name</summary>
+      <description>Human-readable name of the arrival station</description>
+    </key>
+
+    <key name="panel-position" type="s">
+      <default>'right'</default>
+      <summary>Panel position</summary>
+      <description>Position of the indicator in the top bar: left, center, or right</description>
+    </key>
+
+    <key name="max-departures" type="i">
+      <default>5</default>
+      <summary>Maximum departures</summary>
+      <description>Maximum number of departures to display</description>
+    </key>
+
+    <key name="refresh-interval" type="i">
+      <default>60</default>
+      <summary>Refresh interval</summary>
+      <description>Polling interval in seconds</description>
+    </key>
+
+    <key name="train-type-filter" type="as">
+      <default>['Train grande vitesse', 'TER / Intercités']</default>
+      <summary>Train type filter</summary>
+      <description>Physical mode names to display (e.g. "Train grande vitesse", "TER / Intercités", "Autocar")</description>
+    </key>
+
+    <key name="log-level" type="s">
+      <default>'error'</default>
+      <summary>Log level</summary>
+      <description>Logging verbosity: debug, info, warn, error, or off</description>
+    </key>
+
+    <key name="coverage-region" type="s">
+      <default>'sncf'</default>
+      <summary>Coverage region</summary>
+      <description>Navitia coverage region ID (api.sncf.com uses a single "sncf" region)</description>
+    </key>
+
+  </schema>
+</schemalist>
