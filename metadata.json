@@ -6,6 +6,7 @@
   "version": 1,
   "settings-schema": "org.gnome.shell.extensions.sncf-departures",
   "shell-version": [
-    "49"
+    "49",
+    "50"
   ]
 }
