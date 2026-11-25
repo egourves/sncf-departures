@@ -33,7 +33,7 @@ sncf-departures@dev.gourves.net`) and fill in:
 2. **Departure station** — search by name and pick a result.
 3. *(Optional)* **Arrival station** — filter departures to trains heading toward
    this station.
-4. *(Optional)* **Train types** — restrict displayed trains (TGV, TER, Autocar).
+4. *(Optional)* **Train types** — restrict displayed trains (grandes lignes, TER, autocar).
 
 ## License
 

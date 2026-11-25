@@ -46,7 +46,7 @@ class DepartureRow extends PopupMenu.PopupBaseMenuItem {
 
         // Train type column (TGV, TER, etc.)
         const typeLabel = new St.Label({
-            text: _shortModeName(departure),
+            text: departure.badge,
             style_class: 'sncf-train-type',
             x_align: Clutter.ActorAlign.START,
         });
@@ -143,7 +143,7 @@ class SncfIndicator extends PanelMenu.Button {
             parts.push(`V.${next.quay}`);
 
         parts.push('-');
-        parts.push(_shortModeName(next));
+        parts.push(next.badge);
         if (next.headsign)
             parts.push(next.headsign);
 
@@ -156,7 +156,7 @@ class SncfIndicator extends PanelMenu.Button {
         this._label.set_text(text);
     }
 
-    buildMenu(departures, stationName) {
+    buildMenu(departures, stationName, error = null) {
         this.menu.removeAll();
 
         // Header
@@ -166,6 +166,12 @@ class SncfIndicator extends PanelMenu.Button {
         this.menu.addMenuItem(header);
 
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+
+        if (error) {
+            const errorItem = new PopupMenu.PopupMenuItem(error, {reactive: false});
+            errorItem.label.add_style_class_name('sncf-error');
+            this.menu.addMenuItem(errorItem);
+        }
 
         if (!departures || departures.length === 0) {
             const empty = new PopupMenu.PopupMenuItem(
@@ -196,21 +202,10 @@ function _formatTime(date) {
     return `${h}:${m}`;
 }
 
-/**
- * Shorten commercial mode names for display in columns.
- */
-function _shortModeName(dep) {
-    // Use physical_mode for type label, commercial_mode as refinement for TGV brands
-    if (dep.trainType === 'Train grande vitesse') {
-        if (dep.network === 'OUIGO')
-            return 'OUIGO';
-        return 'TGV';
-    }
-    if (dep.trainType === 'TER / Intercités')
-        return 'TER';
-    if (dep.trainType === 'Autocar')
-        return 'Bus';
-    return dep.trainType || dep.network;
+function _errorHint(message) {
+    if (message.includes('Unable to find object'))
+        return _('Gare introuvable : la resélectionner dans les préférences');
+    return message;
 }
 
 export default class SncfDeparturesExtension extends Extension {
@@ -390,7 +385,8 @@ export default class SncfDeparturesExtension extends Extension {
             // Keep showing last known departures rather than leaving display stale
             this._indicator?.updateTopBar(this._departures);
             this._indicator?.buildMenu(
-                this._departures, this._settings.get_string('departure-station-name'));
+                this._departures, this._settings.get_string('departure-station-name'),
+                _errorHint(e.message));
         }
     }
 }

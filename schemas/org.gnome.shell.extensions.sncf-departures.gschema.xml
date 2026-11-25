@@ -52,9 +52,9 @@
     </key>
 
     <key name="train-type-filter" type="as">
-      <default>['Train grande vitesse', 'TER / Intercités']</default>
+      <default>['mainline', 'ter']</default>
       <summary>Train type filter</summary>
-      <description>Physical mode names to display (e.g. "Train grande vitesse", "TER / Intercités", "Autocar")</description>
+      <description>Categories to display: "mainline", "ter", "coach"</description>
     </key>
 
     <key name="log-level" type="s">

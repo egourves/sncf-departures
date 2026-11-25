@@ -158,15 +158,15 @@ export default class SncfPreferences extends ExtensionPreferences {
         page.add(trainGroup);
 
         const trainTypes = [
-            'Train grande vitesse',
-            'TER / Intercités',
-            'Autocar',
+            ['mainline', _('Grandes lignes (TGV, OUIGO, Intercités…)')],
+            ['ter', _('TER')],
+            ['coach', _('Autocar')],
         ];
         const activeTypes = settings.get_strv('train-type-filter');
 
-        for (const trainType of trainTypes) {
+        for (const [trainType, label] of trainTypes) {
             const row = new Adw.SwitchRow({
-                title: trainType,
+                title: label,
                 active: activeTypes.includes(trainType),
             });
             row.connect('notify::active', () => {
@@ -289,10 +289,10 @@ export default class SncfPreferences extends ExtensionPreferences {
 
         try {
             const encoded = encodeURIComponent(query);
-            const path = `/coverage/${encodeURIComponent(coverage)}/places?q=${encoded}&type[]=stop_area&count=10`;
+            const path = `/coverage/${encodeURIComponent(coverage)}/pt_objects?q=${encoded}&type[]=stop_area&count=10`;
             const data = await _apiRequest(token, path);
 
-            const places = (data.places || [])
+            const places = (data.pt_objects || [])
                 .filter(p => p.embedded_type === 'stop_area');
 
             if (places.length === 0) {

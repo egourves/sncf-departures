@@ -46,3 +46,7 @@
 .sncf-direction {
     font-style: italic;
 }
+
+.sncf-error {
+    color: #f44336;
+}

@@ -36,38 +36,39 @@ message.get_request_headers().append('Authorization', `Basic ${credentials}`);
 the default value of the `coverage-region` GSettings key and used to build every
 endpoint path.
 
+Since 24 November 2026 the data comes from NeTEx (timetables) and SIRI
+(real time). The `sncf` coverage now also carries Île-de-France urban transit
+(RATP métro, RER, Transilien, tramway, bus).
 ---
 
-## 3. Station Search (Stop Area UUID from Name)
+## 3. Station Search (Stop Area ID from Name)
 
 Used by the preferences UI to resolve a station name into the `stop_area` ID
 saved as `departure-station-id` / `arrival-station-id`.
 
 ```
-GET /coverage/{region}/places?q={search_term}&type[]=stop_area&count=10
+GET /coverage/{region}/pt_objects?q={search_term}&type[]=stop_area&count=10
 ```
+
+`/places` answers HTTP 401 (`authentification error: user not found`) for
+regular tokens since the NeTEx switch, hence `pt_objects`.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `q` | string | required | Search term (station name) |
-| `type[]` | string | all types | Filter: `stop_area`, `stop_point`, `address`, `poi`, `administrative_region` |
+| `type[]` | string | all types | Filter: `stop_area`, `line`, `route`, `network`, … |
 | `count` | integer | 10 | Max results |
-
-**Example:**
-```
-GET /coverage/sncf/places?q=Brest&type[]=stop_area&count=10
-```
 
 **Response structure:**
 ```json
 {
-  "places": [
+  "pt_objects": [
     {
-      "id": "stop_area:SNCF:87474007",
-      "name": "Brest",
+      "id": "stop_area:SNC:FR::LMU:a829e6f0-cb0a-11e8-8bfa-f784c1c7c611:",
+      "name": "Brest (Brest)",
       "embedded_type": "stop_area",
       "stop_area": {
-        "id": "stop_area:SNCF:87474007",
+        "id": "stop_area:SNC:FR::LMU:a829e6f0-cb0a-11e8-8bfa-f784c1c7c611:",
         "name": "Brest",
         "label": "Brest (Brest)"
       }
@@ -80,12 +81,12 @@ The `stop_area.id` is the value saved to GSettings.
 
 ### SNCF stop_area ID format
 
-SNCF stop areas follow the pattern `stop_area:SNCF:87XXXXXX` where the 8-digit
-number is the UIC station code. Example: `stop_area:SNCF:87474007` for Brest.
+Stop areas follow the pattern `stop_area:SNC:FR::LMU:<uuid>:`. The former
+`stop_area:SNCF:87XXXXXX` IDs (UIC code) no longer resolve and the UIC code is
+not exposed in `codes[]`; stations saved before the switch must be selected
+again.
 
-Implemented in `lib/api.js:110` (`searchStations`) and `prefs.js:292`
-(`_searchStation`).
-
+Implemented in `lib/api.js` (`searchStations`) and `prefs.js` (`_searchStation`).
 ---
 
 ## 4. Departures from a Station
@@ -99,11 +100,18 @@ GET /coverage/{region}/stop_areas/{stop_area_id}/departures
 | `from_datetime` | string | now | Start time — format: `YYYYMMDDTHHmmss` |
 | `count` | integer | 10 | Number of departures to return (max 200) |
 | `data_freshness` | string | `base_schedule` | `realtime` for live data, `base_schedule` for timetable |
+| `forbidden_uris[]` | string | none | Exclude objects, e.g. `physical_mode:Metro` |
+
+The extension excludes urban transit with `forbidden_uris[]`:
+`physical_mode:Metro`, `physical_mode:RapidTransit`, `physical_mode:Tramway`,
+`physical_mode:Bus` and `commercial_mode:LocalTrain` (Transilien). TER trains
+use `physical_mode:LocalTrain` ("Train Transilien") too, so Transilien is
+excluded by commercial mode, not physical mode.
 
 **Example:**
 ```
-GET /coverage/sncf/stop_areas/stop_area:SNCF:87474007/departures
-    ?from_datetime=20240315T080000
+GET /coverage/sncf/stop_areas/stop_area:SNC:FR::LMU:a829e6f0-cb0a-11e8-8bfa-f784c1c7c611:/departures
+    ?from_datetime=20261125T170000
     &count=10
     &data_freshness=realtime
 ```
@@ -114,29 +122,26 @@ GET /coverage/sncf/stop_areas/stop_area:SNCF:87474007/departures
 {
   "departures": [
     {
+      "stop_point": { "platform_code": null },
       "stop_date_time": {
-        "departure_date_time": "20240315T083200",
-        "base_departure_date_time": "20240315T083000",
-        "data_freshness": "realtime",
-        "stop_point": { "platform_code": "3" }
+        "departure_date_time": "20261125T172200",
+        "base_departure_date_time": "20261125T172200",
+        "data_freshness": "base_schedule"
       },
       "display_informations": {
-        "direction": "Paris Montparnasse (Paris)",
-        "code": "TGV 8710",
-        "headsign": "8710",
-        "commercial_mode": "TGV INOUI",
-        "physical_mode": "Train grande vitesse",
-        "network": "SNCF",
-        "label": "TGV INOUI"
+        "direction": "Paris Montparnasse Hall 1 - 2 (Paris)",
+        "code": "401A",
+        "label": "401A",
+        "headsign": "Paris Montparnasse Hall 1 - 2",
+        "name": "Paris - Brest TGV",
+        "trip_short_name": "8642",
+        "commercial_mode": "Train",
+        "physical_mode": "Train",
+        "network": "Atlantique"
       },
-      "route": {
-        "name": "Brest - Paris Montparnasse",
-        "direction": {
-          "stop_area": { "id": "stop_area:SNCF:87391003" }
-        }
-      },
+      "route": { "name": "...", "direction": { "stop_area": { "id": "..." } } },
       "links": [
-        { "type": "vehicle_journey", "id": "vehicle_journey:SNCF:..." },
+        { "type": "vehicle_journey", "id": "vehicle_journey:SNC:FR:ServiceJourney::SN8642FERRE_13479231" },
         { "type": "disruption", "id": "..." }
       ]
     }
@@ -153,9 +158,11 @@ GET /coverage/sncf/stop_areas/stop_area:SNCF:87474007/departures
 }
 ```
 
+`platform_code` was `null` on every departure sampled on 25 November 2026.
+
 ### Field mapping to the extension's data model
 
-Parsed in `lib/api.js:316` (`_parseDeparture`):
+Parsed in `lib/api.js` (`_parseDeparture`):
 
 | Extension field | API field |
 |-----------------|-----------|
@@ -165,17 +172,15 @@ Parsed in `lib/api.js:316` (`_parseDeparture`):
 | `direction` | `display_informations.direction` \|\| `route.name` |
 | `direction_id` | `route.direction.stop_area.id` |
 | `line` | `display_informations.code` |
-| `network` | `display_informations.commercial_mode` \|\| `display_informations.network` |
-| `trainType` | `display_informations.physical_mode` |
-| `headsign` | `display_informations.headsign` |
-| `quay` | `stop_date_time.stop_point.platform_code` |
+| `category`, `badge` | derived by `classify()`, see §6 |
+| `headsign` | `display_informations.trip_short_name` (train number) \|\| `display_informations.headsign` (now the destination) |
+| `quay` | `stop_point.platform_code` |
 | `cancelled` | `data_freshness == realtime` && `departure_date_time == ""`, or `label` contains `supprimé` |
 | `vehicleJourneyId` | first `links[]` entry with `type == vehicle_journey` |
 | `disruption` | looked up from top-level `disruptions[]` by matching `links[].type == disruption` |
 
 When `data_freshness` is `base_schedule`, `departure_date_time` equals
 `base_departure_date_time` and `delayMinutes` is 0.
-
 ---
 
 ## 5. Vehicle Journey Stops
@@ -197,7 +202,7 @@ GET /coverage/{region}/vehicle_journeys/{vehicle_journey_id}?depth=2
         {
           "stop_point": {
             "name": "Brest",
-            "stop_area": { "id": "stop_area:SNCF:87474007" }
+            "stop_area": { "id": "stop_area:SNC:FR::LMU:a829e6f0-cb0a-11e8-8bfa-f784c1c7c611:" }
           }
         }
       ]
@@ -206,25 +211,29 @@ GET /coverage/{region}/vehicle_journeys/{vehicle_journey_id}?depth=2
 }
 ```
 
-Implemented in `lib/api.js:134` (`fetchVehicleJourneyStops`). Results are
+Implemented in `lib/api.js` (`fetchVehicleJourneyStops`). Results are
 cached in-memory by `vehicle_journey_id` and persistently by `headsign`
-(see `lib/api.js:229`).
+(`_persistentCachePath`).
 
 ---
 
-## 6. Physical Modes
+## 6. Train Categories
 
-The extension filters client-side by `display_informations.physical_mode`
-(stored as `trainType` in the parsed departure). Configured via the
-`train-type-filter` GSettings key; defaults to:
+No single field identifies the train type since the NeTEx switch: most
+TGV INOUI come as `commercial_mode: "Train"`, OUIGO as `"TGV"`, TER coaches as
+`commercial_mode: "TER"` with `physical_mode: "Autocar"`. `classify()` in
+`lib/api.js` combines `physical_mode`, `commercial_mode`, `network` and `name`:
 
-- `Train grande vitesse` (TGV / OUIGO / Intercités)
-- `TER / Intercités`
-- `Autocar`
+| Category | Rule | Badge |
+|----------|------|-------|
+| `coach` | `physical_mode == Autocar`, or `commercial_mode` ∈ {Autocar, Bus, Bus de substitution} unless `physical_mode == Train` | `Bus` |
+| `ter` | `commercial_mode == TER` or `network` starts with `TER` | `TER` |
+| `mainline` | `physical_mode == Train` | `OUIGO` / `Eurostar` (by `network`), `TGV` (`commercial_mode == TGV` or `name` contains `TGV`), `IC`, else `Train` |
+| `other` | anything else | `commercial_mode` |
 
-Brand-level refinement (TGV vs OUIGO) is read from `commercial_mode` in
-`extension.js:202` (`_shortModeName`).
-
+The `train-type-filter` GSettings key holds categories (`mainline`, `ter`,
+`coach`); it defaults to `['mainline', 'ter']`. Values left over from older
+versions are ignored.
 ---
 
 ## 7. Datetime Format
@@ -236,8 +245,7 @@ date and time):
 20240315T083000  →  2024-03-15 at 08:30:00
 ```
 
-Implemented in `lib/api.js:357` (`_formatNavitiaDate`) and `lib/api.js:363`
-(`_parseNavitiaDate`).
+Implemented in `lib/api.js` (`_formatNavitiaDate`, `_parseNavitiaDate`).
 
 ---
 
