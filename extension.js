@@ -9,9 +9,12 @@ import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
-import {NavitiaClient} from './lib/api.js';
+import {NavitiaClient, addCancelledTrains} from './lib/api.js';
 import {NotificationManager} from './lib/notifications.js';
 import * as Logger from './lib/logger.js';
+import {formatDelay} from './lib/format.js';
+
+const DELAY_MARGIN_MINUTES = 120;
 
 const DepartureRow = GObject.registerClass(
 class DepartureRow extends PopupMenu.PopupBaseMenuItem {
@@ -67,7 +70,7 @@ class DepartureRow extends PopupMenu.PopupBaseMenuItem {
             delayText = _('Supprimé');
             delayStyle += ' sncf-cancelled';
         } else if (departure.delayMinutes > 0) {
-            delayText = `+${departure.delayMinutes}'`;
+            delayText = formatDelay(departure.delayMinutes, "'");
             delayStyle += ' sncf-delayed';
         } else if (departure.delayMinutes === 0) {
             delayText = _('à l\'heure');
@@ -151,7 +154,7 @@ class SncfIndicator extends PanelMenu.Button {
         if (next.cancelled)
             text += ' \u2715';
         else if (next.delayMinutes > 0)
-            text += ` +${next.delayMinutes}'`;
+            text += ` ${formatDelay(next.delayMinutes, "'")}`;
 
         this._label.set_text(text);
     }
@@ -212,6 +215,8 @@ export default class SncfDeparturesExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
         this._departures = [];
+        this._planned = null;
+        this._plannedFetchedAt = 0;
         this._consecutiveErrors = 0;
 
         Logger.setLevel(this._settings.get_string('log-level'));
@@ -241,7 +246,8 @@ export default class SncfDeparturesExtension extends Extension {
                 this._client.coverage = settings.get_string('coverage-region');
 
             if (['departure-station-id', 'api-token', 'refresh-interval',
-                 'max-departures', 'train-type-filter', 'arrival-station-id'].includes(key)) {
+                 'max-departures', 'train-type-filter', 'arrival-station-id',
+                 'time-window', 'schedule-refresh-interval'].includes(key)) {
                 this._restartPolling();
             }
         });
@@ -296,20 +302,49 @@ export default class SncfDeparturesExtension extends Extension {
         this._client?.cancel();
     }
 
-    _refreshDisplay() {
-        const now = new Date();
-        const visible = this._departures.filter(dep => {
-            // Keep cancelled trains up to 1 minute after scheduled departure
-            const cutoff = dep.cancelled ? dep.time + 60000 : dep.realtimeTime;
-            return cutoff >= now;
-        });
+    _visibleDepartures() {
+        const now = Date.now();
+        const windowEnd = now + this._settings.get_int('time-window') * 60000;
+        return this._departures.filter(dep => dep.cancelled
+            ? dep.time >= now - 60000 && dep.time <= windowEnd
+            // A delayed train stays listed while either its planned or expected time is in the window.
+            : dep.realtimeTime >= now && Math.min(dep.time, dep.realtimeTime) <= windowEnd)
+            .slice(0, this._settings.get_int('max-departures'));
+    }
+
+    _refreshDisplay(error = null) {
+        const visible = this._visibleDepartures();
         this._indicator?.updateTopBar(visible);
-        this._indicator?.buildMenu(visible, this._settings.get_string('departure-station-name'));
+        this._indicator?.buildMenu(visible, this._settings.get_string('departure-station-name'), error);
+        return visible;
     }
 
     _restartPolling() {
         this._stopPolling();
+        this._planned = null;
         this._startPolling();
+    }
+
+    async _fetchPlanned(stationId, windowMinutes) {
+        const refreshMinutes = this._settings.get_int('schedule-refresh-interval');
+        if (this._planned && Date.now() - this._plannedFetchedAt < refreshMinutes * 60000)
+            return this._planned;
+
+        try {
+            // Long enough to still cover the window when the next schedule refresh is due.
+            const {departures} = await this._client.fetchDepartures(stationId, {
+                freshness: 'base_schedule',
+                durationMinutes: windowMinutes + refreshMinutes,
+            });
+            this._planned = departures;
+            this._plannedFetchedAt = Date.now();
+        } catch (e) {
+            if (e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+                throw e;
+            // Real-time departures are still worth showing without cancellation detection.
+            Logger.warn(`Planned timetable fetch failed: ${e.message}`);
+        }
+        return this._planned ?? [];
     }
 
     async _enrichDirections(departures, departureStationId, arrivalStationId) {
@@ -344,33 +379,43 @@ export default class SncfDeparturesExtension extends Extension {
         }
 
         try {
-            const maxDepartures = this._settings.get_int('max-departures');
             const trainTypes = this._settings.get_strv('train-type-filter');
             const arrivalId = this._settings.get_string('arrival-station-id');
-            // Fetch more when filters are active to ensure enough results after filtering
-            const fetchCount = (arrivalId || trainTypes.length > 0) ? 50 : maxDepartures + 5;
-            Logger.debug(`Fetching departures for station ${stationId}, fetchCount: ${fetchCount}`);
-            let departures = await this._client.fetchDepartures(stationId, fetchCount);
-            Logger.info(`Got ${departures.length} departures from API`);
+            const windowMinutes = this._settings.get_int('time-window');
 
+            const planned = await this._fetchPlanned(stationId, windowMinutes);
+            // The margin keeps planned trains delayed past the window from reading as cancelled.
+            const {departures: realtime, complete} = await this._client.fetchDepartures(stationId, {
+                durationMinutes: windowMinutes + DELAY_MARGIN_MINUTES,
+            });
+            Logger.info(`Got ${realtime.length} real-time and ${planned.length} planned departures`);
+
+            const windowEnd = new Date(Date.now() + windowMinutes * 60000);
+            let checkedUntil = windowEnd;
+            if (realtime.length === 0) {
+                // An empty answer is likelier a feed fault than every train cancelled.
+                checkedUntil = new Date(0);
+            } else if (!complete) {
+                // A truncated list only proves absence for trains planned well before its end.
+                const lastExpected = realtime[realtime.length - 1].realtimeTime;
+                checkedUntil = new Date(Math.min(windowEnd, lastExpected - DELAY_MARGIN_MINUTES * 60000));
+            }
+            let departures = addCancelledTrains(realtime, planned, checkedUntil);
+
+            // Trains past the window only serve the cancellation check: skip their stop lookups.
+            departures = departures.filter(dep => Math.min(dep.time, dep.realtimeTime) <= windowEnd);
             departures = this._client.filterDepartures(departures, {trainTypes});
             Logger.debug(`After filtering: ${departures.length} departures`);
 
-            const departureId = this._settings.get_string('departure-station-id');
             if (arrivalId)
-                departures = await this._enrichDirections(departures, departureId, arrivalId);
-
-            departures = departures.slice(0, maxDepartures);
+                departures = await this._enrichDirections(departures, stationId, arrivalId);
 
             this._departures = departures;
             this._consecutiveErrors = 0;
 
-            Logger.info(`Displaying ${departures.length} departures`);
-            this._indicator?.updateTopBar(departures);
-            this._indicator?.buildMenu(
-                departures, this._settings.get_string('departure-station-name'));
-
-            this._notifications?.checkDepartures(departures);
+            const visible = this._refreshDisplay();
+            Logger.info(`Displaying ${visible.length} departures`);
+            this._notifications?.checkDepartures(visible);
         } catch (e) {
             if (e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
                 return;
@@ -383,10 +428,7 @@ export default class SncfDeparturesExtension extends Extension {
                 this._notifications?.notifyError(e.message);
 
             // Keep showing last known departures rather than leaving display stale
-            this._indicator?.updateTopBar(this._departures);
-            this._indicator?.buildMenu(
-                this._departures, this._settings.get_string('departure-station-name'),
-                _errorHint(e.message));
+            this._refreshDisplay(_errorHint(e.message));
         }
     }
 }

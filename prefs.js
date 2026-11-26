@@ -242,6 +242,35 @@ export default class SncfPreferences extends ExtensionPreferences {
         });
         displayGroup.add(refreshRow);
 
+        const windowRow = new Adw.SpinRow({
+            title: _('Fenêtre d\'affichage (min)'),
+            adjustment: new Gtk.Adjustment({
+                lower: 30,
+                upper: 720,
+                step_increment: 30,
+                value: settings.get_int('time-window'),
+            }),
+        });
+        windowRow.connect('notify::value', () => {
+            settings.set_int('time-window', windowRow.value);
+        });
+        displayGroup.add(windowRow);
+
+        const scheduleRow = new Adw.SpinRow({
+            title: _('Intervalle de mise à jour des horaires prévus (min)'),
+            subtitle: _('Sert à détecter les trains supprimés'),
+            adjustment: new Gtk.Adjustment({
+                lower: 5,
+                upper: 120,
+                step_increment: 5,
+                value: settings.get_int('schedule-refresh-interval'),
+            }),
+        });
+        scheduleRow.connect('notify::value', () => {
+            settings.set_int('schedule-refresh-interval', scheduleRow.value);
+        });
+        displayGroup.add(scheduleRow);
+
         // Log level
         const logLevelModel = new Gtk.StringList();
         const logLevels = ['off', 'error', 'warn', 'info', 'debug'];

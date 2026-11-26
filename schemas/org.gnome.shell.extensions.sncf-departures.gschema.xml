@@ -51,6 +51,18 @@
       <description>Polling interval in seconds</description>
     </key>
 
+    <key name="time-window" type="i">
+      <default>180</default>
+      <summary>Time window</summary>
+      <description>Show trains leaving within this many minutes</description>
+    </key>
+
+    <key name="schedule-refresh-interval" type="i">
+      <default>30</default>
+      <summary>Schedule refresh interval</summary>
+      <description>Minutes between fetches of the planned timetable, used to detect cancelled trains</description>
+    </key>
+
     <key name="train-type-filter" type="as">
       <default>['mainline', 'ter']</default>
       <summary>Train type filter</summary>
