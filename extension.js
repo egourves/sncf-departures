@@ -12,6 +12,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {NavitiaClient, addCancelledTrains} from './lib/api.js';
 import {NotificationManager} from './lib/notifications.js';
 import * as Logger from './lib/logger.js';
+import {formatDelay} from './lib/format.js';
 
 const DELAY_MARGIN_MINUTES = 120;
 
@@ -69,7 +70,7 @@ class DepartureRow extends PopupMenu.PopupBaseMenuItem {
             delayText = _('Supprimé');
             delayStyle += ' sncf-cancelled';
         } else if (departure.delayMinutes > 0) {
-            delayText = `+${departure.delayMinutes}'`;
+            delayText = formatDelay(departure.delayMinutes, "'");
             delayStyle += ' sncf-delayed';
         } else if (departure.delayMinutes === 0) {
             delayText = _('à l\'heure');
@@ -153,7 +154,7 @@ class SncfIndicator extends PanelMenu.Button {
         if (next.cancelled)
             text += ' \u2715';
         else if (next.delayMinutes > 0)
-            text += ` +${next.delayMinutes}'`;
+            text += ` ${formatDelay(next.delayMinutes, "'")}`;
 
         this._label.set_text(text);
     }
