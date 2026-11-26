@@ -185,7 +185,7 @@ Parsed in `lib/api.js` (`_parseDeparture`):
 | `category`, `badge` | derived by `classify()`, see §6 |
 | `headsign` | `display_informations.trip_short_name` (train number) \|\| `display_informations.headsign` (now the destination) |
 | `quay` | `stop_point.platform_code` |
-| `cancelled` | `data_freshness == realtime` && `departure_date_time == ""`, or `label` contains `supprimé` |
+| `cancelled` | `false` from the API; set by `addCancelledTrains()` for planned trains missing from real time, see "Cancelled trains" |
 | `vehicleJourneyId` | first `links[]` entry with `type == vehicle_journey` |
 | `disruption` | looked up from top-level `disruptions[]` by matching `links[].type == disruption` |
 
@@ -221,8 +221,23 @@ Verified on 26 November 2026 around 09:30:
 | 9243 | Chambéry - Challes-les-Eaux, 09:44 | absent (of 40 departures) | present, 1 disruption link |
 | 3108 | Bréauté - Beuzeville, 09:32 | absent | present, 1 disruption link |
 
-The `cancelled` rule in the mapping above therefore never matches with
-`data_freshness=realtime`.
+The extension therefore fetches both: `base_schedule` every
+`schedule-refresh-interval` minutes, `realtime` on every poll. A planned train
+whose vehicle journey is absent from the real-time departures is shown as
+cancelled. Two behaviours make the comparison work, both verified on
+26 November 2026 at Arras with train 843916 (planned 14:31, expected 14:36):
+
+- An amended train gets its own vehicle journey ID in real time, the planned ID
+  followed by `:RealTime:<uuid>`
+  (`…SN843916FERRE_13454522` → `…SN843916FERRE_13454522:RealTime:012f69df-…`),
+  so IDs are compared with that suffix stripped.
+- With `data_freshness=realtime`, `from_datetime` applies to the expected time:
+  asked from 14:33, the response still listed 843916. With `base_schedule` it
+  applies to the planned time and 843916 was left out.
+
+The real-time request starts two minutes in the past, so a train that has
+just left is not mistaken for a cancelled one, and covers two hours past the
+time window, so a planned train delayed out of the window still shows up.
 
 Current cancellations can be found with
 `GET /coverage/sncf/disruptions?since=<now>`: filter `severity.effect ==
